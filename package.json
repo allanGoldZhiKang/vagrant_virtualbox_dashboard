@@ -1,0 +1,16 @@
+{
+  "name": "vbox-config",
+  "version": "1.0.0",
+  "description": "Interactive VirtualBox VM Configuration Manager",
+  "main": "src/index.js",
+  "bin": {
+    "vbox-config": "./vbox-config"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node src/utils/vbox.js"
+  },
+  "keywords": ["virtualbox", "vm", "configuration", "cli"],
+  "author": "VBox Config Tool",
+  "license": "MIT"
+}
