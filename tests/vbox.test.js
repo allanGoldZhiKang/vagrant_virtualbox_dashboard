@@ -129,24 +129,20 @@ async function testErrorHandling() {
   console.log('✅ 错误处理测试通过')
 }
 
-// 测试真实的 VBoxManage 函数（如果可用）
 async function testRealVBoxManage() {
   console.log('🧪 测试真实 VBoxManage 功能...')
   
   try {
     const vbox = require('../src/utils/vbox')
     
-    // 测试 executeVBoxManage 函数是否存在
     if (typeof vbox.executeVBoxManage !== 'function') {
       throw new Error('executeVBoxManage 函数不存在')
     }
     
-    // 测试 listVMs 函数是否存在
     if (typeof vbox.listVMs !== 'function') {
       throw new Error('listVMs 函数不存在')
     }
     
-    // 测试 testVBoxManage 函数是否存在
     if (typeof vbox.testVBoxManage !== 'function') {
       throw new Error('testVBoxManage 函数不存在')
     }
@@ -158,13 +154,47 @@ async function testRealVBoxManage() {
   }
 }
 
-// 运行所有测试
+async function testDisplayFunctions() {
+  console.log('🧪 测试显示配置函数...')
+  
+  try {
+    delete require.cache[require.resolve('../src/utils/vbox')]
+    const vbox = require('../src/utils/vbox')
+    
+    if (typeof vbox.modifyVMVRAM !== 'function') {
+      throw new Error('modifyVMVRAM 函数不存在')
+    }
+    
+    if (typeof vbox.modifyGraphicsController !== 'function') {
+      throw new Error('modifyGraphicsController 函数不存在')
+    }
+    
+    if (typeof vbox.set3DAcceleration !== 'function') {
+      throw new Error('set3DAcceleration 函数不存在')
+    }
+    
+    if (typeof vbox.set2DAcceleration !== 'function') {
+      throw new Error('set2DAcceleration 函数不存在')
+    }
+    
+    if (typeof vbox.getDisplayInfo !== 'function') {
+      throw new Error('getDisplayInfo 函数不存在')
+    }
+    
+    console.log('✅ 显示配置函数测试通过')
+  } catch (error) {
+    console.log(`❌ 显示配置函数测试失败: ${error.message}`)
+    throw error
+  }
+}
+
 async function runAllTests() {
   try {
     await testVBoxManageExecution()
     testVMListParsing()
     await testErrorHandling()
     await testRealVBoxManage()
+    await testDisplayFunctions()
     console.log('\n🎉 所有 VirtualBox 功能测试通过!')
     return true
   } catch (error) {
@@ -173,11 +203,10 @@ async function runAllTests() {
   }
 }
 
-// 如果直接运行此文件，执行测试
 if (require.main === module) {
   runAllTests().then(success => {
     process.exit(success ? 0 : 1)
   })
 }
 
-module.exports = { runAllTests, testVBoxManageExecution, testVMListParsing, testErrorHandling, testRealVBoxManage }
+module.exports = { runAllTests, testVBoxManageExecution, testVMListParsing, testErrorHandling, testRealVBoxManage, testDisplayFunctions }

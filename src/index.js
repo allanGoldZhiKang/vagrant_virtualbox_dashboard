@@ -11,7 +11,12 @@ const {
   stopVM, 
   forceStopVM,
   getVMDiskInfo,
-  modifyDiskSize
+  modifyDiskSize,
+  modifyVMVRAM,
+  modifyGraphicsController,
+  set3DAcceleration,
+  set2DAcceleration,
+  getDisplayInfo
 } = require('./utils/vbox')
 
 const { syncVagrantfile } = require('./utils/vagrantfile')
@@ -189,8 +194,9 @@ async function showConfigMenu(vmName, isVagrant = false) {
 │ 1. 修改内存                              │
 │ 2. 修改 CPU 核心数                       │
 │ 3. 修改磁盘容量                          │
-│ 4. 查看当前配置                          │
-│ 5. 返回主菜单                            │
+│ 4. 显示配置                              │
+│ 5. 查看当前配置                          │
+│ 6. 返回主菜单                            │
 └─────────────────────────────────────────┘
   `)
 
@@ -203,7 +209,7 @@ async function showConfigMenu(vmName, isVagrant = false) {
   }
 
   const rl = getReadline()
-  rl.question('请选择操作 (1-5): ', async (choice) => {
+  rl.question('请选择操作 (1-6): ', async (choice) => {
     switch (choice.trim()) {
       case '1':
         await modifyMemory(vmName, isVagrant)
@@ -215,9 +221,12 @@ async function showConfigMenu(vmName, isVagrant = false) {
         await modifyDisk(vmName, isVagrant)
         break
       case '4':
-        await showVMConfig(vmName, isVagrant)
+        await showDisplayConfigMenu(vmName, isVagrant)
         break
       case '5':
+        await showVMConfig(vmName, isVagrant)
+        break
+      case '6':
         showMainMenu()
         break
       default:
@@ -519,6 +528,378 @@ async function modifyDiskSizeInteractive(disk, vmName, isVagrant) {
   })
 }
 
+async function showDisplayConfigMenu(vmName, isVagrant = false) {
+  console.clear()
+  console.log(`🖥️  显示配置: ${vmName}\n`)
+
+  try {
+    const displayInfo = await getDisplayInfo(vmName)
+
+    console.log('【当前显示配置】')
+    console.log(`显存: ${displayInfo.vram} MB`)
+    console.log(`图形控制器: ${displayInfo.graphicsController}`)
+    console.log(`3D 加速: ${displayInfo.accelerate3d ? '已启用' : '已禁用'}`)
+    console.log(`2D 加速: ${displayInfo.accelerate2dvideo ? '已启用' : '已禁用'}`)
+    console.log('')
+  } catch (error) {
+    console.log(`❌ 获取显示配置失败: ${error.message}\n`)
+  }
+
+  console.log(`
+┌─────────────────────────────────────────┐
+│     显示配置菜单                         │
+├─────────────────────────────────────────┤
+│ 1. 修改显存                              │
+│ 2. 修改图形控制器                        │
+│ 3. 切换 3D 加速                          │
+│ 4. 切换 2D 加速                          │
+│ 5. 一键优化 (Ubuntu 桌面推荐)            │
+│ 6. 返回配置菜单                          │
+└─────────────────────────────────────────┘
+  `)
+
+  const rl = getReadline()
+  rl.question('请选择操作 (1-6): ', async (choice) => {
+    switch (choice.trim()) {
+      case '1':
+        await modifyVRAM(vmName, isVagrant)
+        break
+      case '2':
+        await modifyGraphicsControllerMenu(vmName, isVagrant)
+        break
+      case '3':
+        await toggle3DAcceleration(vmName, isVagrant)
+        break
+      case '4':
+        await toggle2DAcceleration(vmName, isVagrant)
+        break
+      case '5':
+        await applyDisplayPreset(vmName, isVagrant)
+        break
+      case '6':
+        showConfigMenu(vmName, isVagrant)
+        break
+      default:
+        console.log('❌ 无效选择')
+        await pause()
+        showDisplayConfigMenu(vmName, isVagrant)
+    }
+  })
+}
+
+async function modifyVRAM(vmName, isVagrant = false) {
+  console.clear()
+  console.log(`🎮 修改 ${vmName} 的显存\n`)
+
+  try {
+    const displayInfo = await getDisplayInfo(vmName)
+    
+    console.log(`当前显存: ${displayInfo.vram} MB`)
+    console.log('支持的显存范围: 1 MB - 256 MB')
+    console.log('')
+    console.log('💡 推荐配置:')
+    console.log('   - 无界面/服务器模式: 16 MB')
+    console.log('   - 桌面环境: 64-128 MB')
+    console.log('   - 3D 应用/开发: 128-256 MB')
+    
+    const rl = getReadline()
+    rl.question('\n请输入新的显存大小 (MB): ', async (input) => {
+      const vramMB = parseInt(input.trim())
+      
+      if (isNaN(vramMB) || vramMB < 1 || vramMB > 256) {
+        console.log('❌ 无效的显存大小')
+        await pause()
+        showDisplayConfigMenu(vmName, isVagrant)
+        return
+      }
+      
+      try {
+        await modifyVMVRAM(vmName, vramMB)
+        console.log(`✅ 显存已修改为 ${vramMB} MB`)
+        
+        if (isVagrant) {
+          console.log('\n🔄 正在自动同步 Vagrantfile...')
+          const syncResult = await syncVagrantfile(vmName, 'vram', vramMB)
+          
+          if (syncResult.success) {
+            console.log(`✅ ${syncResult.message}`)
+            console.log(`📁 Vagrantfile 位置: ${syncResult.vagrantfilePath}`)
+          } else {
+            console.log(`⚠️  ${syncResult.message}`)
+            console.log('\n💡 请手动修改 Vagrantfile:')
+            console.log(`   vb.customize ["modifyvm", :id, "--vram", "${vramMB}"]`)
+          }
+        }
+      } catch (error) {
+        console.log(`❌ 修改失败: ${error.message}`)
+      }
+      
+      await pause()
+      showDisplayConfigMenu(vmName, isVagrant)
+    })
+  } catch (error) {
+    console.log(`❌ 错误: ${error.message}`)
+    await pause()
+    showDisplayConfigMenu(vmName, isVagrant)
+  }
+}
+
+async function modifyGraphicsControllerMenu(vmName, isVagrant = false) {
+  console.clear()
+  console.log(`🎨 修改 ${vmName} 的图形控制器\n`)
+
+  try {
+    const displayInfo = await getDisplayInfo(vmName)
+    
+    console.log(`当前图形控制器: ${displayInfo.graphicsController}`)
+    console.log('')
+    console.log('可用的图形控制器:')
+    console.log('  1. VMSVGA    - Linux 系统推荐 (Ubuntu, CentOS 等)')
+    console.log('  2. VBoxSVGA  - Windows 系统推荐')
+    console.log('  3. VBoxVGA   - 旧版兼容模式')
+    console.log('  4. None      - 无图形控制器')
+    console.log('  5. 返回')
+    
+    const rl = getReadline()
+    rl.question('\n请选择图形控制器 (1-5): ', async (input) => {
+      const choice = input.trim()
+      let controller = null
+      
+      switch (choice) {
+        case '1':
+          controller = 'vmsvga'
+          break
+        case '2':
+          controller = 'vboxsvga'
+          break
+        case '3':
+          controller = 'vboxvga'
+          break
+        case '4':
+          controller = 'none'
+          break
+        case '5':
+          showDisplayConfigMenu(vmName, isVagrant)
+          return
+        default:
+          console.log('❌ 无效选择')
+          await pause()
+          modifyGraphicsControllerMenu(vmName, isVagrant)
+          return
+      }
+      
+      try {
+        await modifyGraphicsController(vmName, controller)
+        console.log(`✅ 图形控制器已修改为 ${controller}`)
+        
+        if (isVagrant) {
+          console.log('\n🔄 正在自动同步 Vagrantfile...')
+          const syncResult = await syncVagrantfile(vmName, 'graphicscontroller', controller)
+          
+          if (syncResult.success) {
+            console.log(`✅ ${syncResult.message}`)
+            console.log(`📁 Vagrantfile 位置: ${syncResult.vagrantfilePath}`)
+          } else {
+            console.log(`⚠️  ${syncResult.message}`)
+            console.log('\n💡 请手动修改 Vagrantfile:')
+            console.log(`   vb.customize ["modifyvm", :id, "--graphicscontroller", "${controller}"]`)
+          }
+        }
+      } catch (error) {
+        console.log(`❌ 修改失败: ${error.message}`)
+      }
+      
+      await pause()
+      showDisplayConfigMenu(vmName, isVagrant)
+    })
+  } catch (error) {
+    console.log(`❌ 错误: ${error.message}`)
+    await pause()
+    showDisplayConfigMenu(vmName, isVagrant)
+  }
+}
+
+async function toggle3DAcceleration(vmName, isVagrant = false) {
+  console.clear()
+  console.log(`🎮 切换 ${vmName} 的 3D 加速\n`)
+
+  try {
+    const displayInfo = await getDisplayInfo(vmName)
+    const newState = !displayInfo.accelerate3d
+    
+    console.log(`当前状态: ${displayInfo.accelerate3d ? '已启用' : '已禁用'}`)
+    console.log(`将切换为: ${newState ? '启用' : '禁用'}`)
+    
+    const rl = getReadline()
+    rl.question('\n确认切换? (y/n): ', async (input) => {
+      if (input.trim().toLowerCase() !== 'y') {
+        showDisplayConfigMenu(vmName, isVagrant)
+        return
+      }
+      
+      try {
+        await set3DAcceleration(vmName, newState)
+        console.log(`✅ 3D 加速已${newState ? '启用' : '禁用'}`)
+        
+        if (isVagrant) {
+          console.log('\n🔄 正在自动同步 Vagrantfile...')
+          const syncResult = await syncVagrantfile(vmName, 'accelerate3d', newState)
+          
+          if (syncResult.success) {
+            console.log(`✅ ${syncResult.message}`)
+            console.log(`📁 Vagrantfile 位置: ${syncResult.vagrantfilePath}`)
+          } else {
+            console.log(`⚠️  ${syncResult.message}`)
+            console.log('\n💡 请手动修改 Vagrantfile:')
+            console.log(`   vb.customize ["modifyvm", :id, "--accelerate3d", "${newState ? 'on' : 'off'}"]`)
+          }
+        }
+        
+        console.log('\n💡 提示: 3D 加速需要安装 Guest Additions 才能正常工作')
+      } catch (error) {
+        console.log(`❌ 修改失败: ${error.message}`)
+      }
+      
+      await pause()
+      showDisplayConfigMenu(vmName, isVagrant)
+    })
+  } catch (error) {
+    console.log(`❌ 错误: ${error.message}`)
+    await pause()
+    showDisplayConfigMenu(vmName, isVagrant)
+  }
+}
+
+async function toggle2DAcceleration(vmName, isVagrant = false) {
+  console.clear()
+  console.log(`🎮 切换 ${vmName} 的 2D 加速\n`)
+
+  try {
+    const displayInfo = await getDisplayInfo(vmName)
+    const newState = !displayInfo.accelerate2dvideo
+    
+    console.log(`当前状态: ${displayInfo.accelerate2dvideo ? '已启用' : '已禁用'}`)
+    console.log(`将切换为: ${newState ? '启用' : '禁用'}`)
+    
+    const rl = getReadline()
+    rl.question('\n确认切换? (y/n): ', async (input) => {
+      if (input.trim().toLowerCase() !== 'y') {
+        showDisplayConfigMenu(vmName, isVagrant)
+        return
+      }
+      
+      try {
+        await set2DAcceleration(vmName, newState)
+        console.log(`✅ 2D 加速已${newState ? '启用' : '禁用'}`)
+        
+        if (isVagrant) {
+          console.log('\n🔄 正在自动同步 Vagrantfile...')
+          const syncResult = await syncVagrantfile(vmName, 'accelerate2d', newState)
+          
+          if (syncResult.success) {
+            console.log(`✅ ${syncResult.message}`)
+            console.log(`📁 Vagrantfile 位置: ${syncResult.vagrantfilePath}`)
+          } else {
+            console.log(`⚠️  ${syncResult.message}`)
+            console.log('\n💡 请手动修改 Vagrantfile:')
+            console.log(`   vb.customize ["modifyvm", :id, "--accelerate2dvideo", "${newState ? 'on' : 'off'}"]`)
+          }
+        }
+      } catch (error) {
+        console.log(`❌ 修改失败: ${error.message}`)
+      }
+      
+      await pause()
+      showDisplayConfigMenu(vmName, isVagrant)
+    })
+  } catch (error) {
+    console.log(`❌ 错误: ${error.message}`)
+    await pause()
+    showDisplayConfigMenu(vmName, isVagrant)
+  }
+}
+
+async function applyDisplayPreset(vmName, isVagrant = false) {
+  console.clear()
+  console.log(`⚡ 一键优化显示配置: ${vmName}\n`)
+
+  console.log('请选择预设配置:')
+  console.log('')
+  console.log('  1. 服务器模式 (无界面)')
+  console.log('     - 显存: 16 MB')
+  console.log('     - 3D 加速: 关闭')
+  console.log('     - 图形控制器: VMSVGA')
+  console.log('')
+  console.log('  2. 桌面模式 (Ubuntu 推荐) ⭐')
+  console.log('     - 显存: 128 MB')
+  console.log('     - 3D 加速: 开启')
+  console.log('     - 图形控制器: VMSVGA')
+  console.log('')
+  console.log('  3. 开发模式 (GUI + 3D)')
+  console.log('     - 显存: 256 MB')
+  console.log('     - 3D 加速: 开启')
+  console.log('     - 图形控制器: VMSVGA')
+  console.log('')
+  console.log('  4. 返回')
+  
+  const rl = getReadline()
+  rl.question('\n请选择预设 (1-4): ', async (input) => {
+    const choice = input.trim()
+    let preset = null
+    
+    switch (choice) {
+      case '1':
+        preset = { vram: 16, accelerate3d: false, controller: 'vmsvga' }
+        break
+      case '2':
+        preset = { vram: 128, accelerate3d: true, controller: 'vmsvga' }
+        break
+      case '3':
+        preset = { vram: 256, accelerate3d: true, controller: 'vmsvga' }
+        break
+      case '4':
+        showDisplayConfigMenu(vmName, isVagrant)
+        return
+      default:
+        console.log('❌ 无效选择')
+        await pause()
+        applyDisplayPreset(vmName, isVagrant)
+        return
+    }
+    
+    console.log('\n🔄 正在应用预设配置...')
+    
+    try {
+      await modifyVMVRAM(vmName, preset.vram)
+      console.log(`✅ 显存已设置为 ${preset.vram} MB`)
+      
+      await set3DAcceleration(vmName, preset.accelerate3d)
+      console.log(`✅ 3D 加速已${preset.accelerate3d ? '启用' : '禁用'}`)
+      
+      await modifyGraphicsController(vmName, preset.controller)
+      console.log(`✅ 图形控制器已设置为 ${preset.controller}`)
+      
+      if (isVagrant) {
+        console.log('\n🔄 正在自动同步 Vagrantfile...')
+        
+        await syncVagrantfile(vmName, 'vram', preset.vram)
+        await syncVagrantfile(vmName, 'accelerate3d', preset.accelerate3d)
+        await syncVagrantfile(vmName, 'graphicscontroller', preset.controller)
+        
+        console.log('✅ Vagrantfile 已同步')
+      }
+      
+      console.log('\n🎉 预设配置已应用成功!')
+      console.log('💡 提示: 如果虚拟机正在运行，需要重启才能生效')
+    } catch (error) {
+      console.log(`❌ 应用预设失败: ${error.message}`)
+    }
+    
+    await pause()
+    showDisplayConfigMenu(vmName, isVagrant)
+  })
+}
+
 // 显示虚拟机配置
 async function showVMConfig(vmName, isVagrant = false) {
   console.clear()
@@ -540,10 +921,20 @@ async function showVMConfig(vmName, isVagrant = false) {
     console.log('【硬件配置】')
     console.log(`内存: ${info.memory || 'N/A'} MB`)
     console.log(`CPU: ${info.cpus || 'N/A'} 核心`)
-    console.log(`显存: ${info.vram || 'N/A'} MB`)
     console.log('')
 
-    // 显示磁盘信息
+    console.log('【显示配置】')
+    try {
+      const displayInfo = await getDisplayInfo(vmName)
+      console.log(`显存: ${displayInfo.vram} MB`)
+      console.log(`图形控制器: ${displayInfo.graphicsController}`)
+      console.log(`3D 加速: ${displayInfo.accelerate3d ? '已启用' : '已禁用'}`)
+      console.log(`2D 加速: ${displayInfo.accelerate2dvideo ? '已启用' : '已禁用'}`)
+    } catch (error) {
+      console.log(`显存: ${info.vram || 'N/A'} MB`)
+    }
+    console.log('')
+
     console.log('【磁盘信息】')
     try {
       const disks = await getVMDiskInfo(vmName)
@@ -776,5 +1167,11 @@ module.exports = {
   modifyDisk,
   modifyDiskSizeInteractive,
   showVMConfig,
-  showToggleMenu
+  showToggleMenu,
+  showDisplayConfigMenu,
+  modifyVRAM,
+  modifyGraphicsControllerMenu,
+  toggle3DAcceleration,
+  toggle2DAcceleration,
+  applyDisplayPreset
 }

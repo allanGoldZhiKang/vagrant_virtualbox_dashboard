@@ -317,18 +317,15 @@ async function getDiskDetails(diskPath) {
 // 修改磁盘容量
 async function modifyDiskSize(diskPath, newSizeGB) {
   try {
-    // 验证容量范围
     if (newSizeGB < 1 || newSizeGB > 2048) {
       throw new Error('磁盘容量必须在 1GB 到 2048GB 之间')
     }
     
-    // 将 GB 转换为 MB (VBoxManage 使用 MB)
     const newSizeMB = Math.floor(newSizeGB * 1024)
     
     await executeVBoxManage(['modifymedium', diskPath, '--resize', newSizeMB.toString()])
     return true
   } catch (error) {
-    // 提供更友好的错误信息
     if (error.message.includes('VBOX_E_INVALID_OBJECT_STATE') || 
         error.message.includes('Failed to lock media')) {
       throw new Error('磁盘正在使用中，请先关闭虚拟机再修改磁盘容量')
@@ -337,6 +334,66 @@ async function modifyDiskSize(diskPath, newSizeGB) {
       throw new Error('此磁盘格式不支持在线扩容，请先关闭虚拟机')
     }
     throw new Error(`修改磁盘容量失败: ${error.message}`)
+  }
+}
+
+async function modifyVMVRAM(vmName, vramMB) {
+  try {
+    if (vramMB < 1 || vramMB > 256) {
+      throw new Error('显存必须在 1MB 到 256MB 之间')
+    }
+    
+    await executeVBoxManage(['modifyvm', vmName, '--vram', vramMB.toString()])
+    return true
+  } catch (error) {
+    throw new Error(`修改显存失败: ${error.message}`)
+  }
+}
+
+async function modifyGraphicsController(vmName, controller) {
+  try {
+    const validControllers = ['vmsvga', 'vboxsvga', 'vboxvga', 'none']
+    if (!validControllers.includes(controller.toLowerCase())) {
+      throw new Error(`无效的图形控制器，支持的选项: ${validControllers.join(', ')}`)
+    }
+    
+    await executeVBoxManage(['modifyvm', vmName, '--graphicscontroller', controller.toLowerCase()])
+    return true
+  } catch (error) {
+    throw new Error(`修改图形控制器失败: ${error.message}`)
+  }
+}
+
+async function set3DAcceleration(vmName, enabled) {
+  try {
+    await executeVBoxManage(['modifyvm', vmName, '--accelerate3d', enabled ? 'on' : 'off'])
+    return true
+  } catch (error) {
+    throw new Error(`设置 3D 加速失败: ${error.message}`)
+  }
+}
+
+async function set2DAcceleration(vmName, enabled) {
+  try {
+    await executeVBoxManage(['modifyvm', vmName, '--accelerate2dvideo', enabled ? 'on' : 'off'])
+    return true
+  } catch (error) {
+    throw new Error(`设置 2D 加速失败: ${error.message}`)
+  }
+}
+
+async function getDisplayInfo(vmName) {
+  try {
+    const info = await getVMInfo(vmName)
+    return {
+      vram: parseInt(info.vram) || 16,
+      graphicsController: info.graphicscontroller || 'vmsvga',
+      accelerate3d: info.accelerate3d === 'on',
+      accelerate2dvideo: info.accelerate2dvideo === 'on',
+      monitorcount: parseInt(info.monitorcount) || 1
+    }
+  } catch (error) {
+    throw new Error(`获取显示配置失败: ${error.message}`)
   }
 }
 
@@ -351,5 +408,10 @@ module.exports = {
   stopVM,
   forceStopVM,
   getVMDiskInfo,
-  modifyDiskSize
+  modifyDiskSize,
+  modifyVMVRAM,
+  modifyGraphicsController,
+  set3DAcceleration,
+  set2DAcceleration,
+  getDisplayInfo
 }

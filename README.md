@@ -6,7 +6,8 @@
 
 - 📋 **列出所有虚拟机** - 显示所有虚拟机及其运行状态，自动识别 Vagrant 虚拟机
 - 🔧 **修改虚拟机配置** - 支持修改内存、CPU 核心数和磁盘容量，针对 Vagrant 虚拟机有特殊提示
-- 📊 **查看虚拟机详情** - 显示虚拟机的详细配置信息，包括磁盘信息
+- �️ **显示配置管理** - 支持修改显存、图形控制器、3D/2D 加速，一键优化显示性能
+- � **查看虚拟机详情** - 显示虚拟机的详细配置信息，包括磁盘信息和显示配置
 - 🔄 **启动/关闭虚拟机** - 支持正常关闭和强制关闭
 - 💾 **磁盘管理** - 支持扩容虚拟磁盘（支持 VDI、VMDK 格式）
 - 🏷️ **Vagrant 支持** - 自动识别 Vagrant 创建的虚拟机，提供专门的配置指导
@@ -93,14 +94,59 @@ npm start
 - **修改内存** - 设置内存大小（256MB - 32768MB）
 - **修改 CPU** - 设置 CPU 核心数（1 - 16 核心）
 - **修改磁盘容量** - 扩容虚拟磁盘（1GB - 2048GB）
-- **查看当前配置** - 显示虚拟机的详细配置，包括磁盘信息
+- **显示配置** - 修改显存、图形控制器、3D/2D 加速等显示相关设置
+- **查看当前配置** - 显示虚拟机的详细配置，包括磁盘信息和显示配置
+
+##### 显示配置菜单
+
+```
+┌─────────────────────────────────────────┐
+│     显示配置菜单                         │
+├─────────────────────────────────────────┤
+│ 1. 修改显存                              │
+│ 2. 修改图形控制器                        │
+│ 3. 切换 3D 加速                          │
+│ 4. 切换 2D 加速                          │
+│ 5. 一键优化 (Ubuntu 桌面推荐)            │
+│ 6. 返回配置菜单                          │
+└─────────────────────────────────────────┘
+```
+
+###### 显存配置
+
+| 用途 | 推荐显存 |
+|------|----------|
+| 无界面/服务器模式 | 16 MB |
+| 基础图形界面 | 64-128 MB |
+| 3D 应用/开发 | 128-256 MB |
+
+**注意**: VirtualBox 最大支持 256 MB 显存。
+
+###### 图形控制器
+
+| 控制器 | 适用场景 |
+|--------|----------|
+| VMSVGA | Linux 系统（Ubuntu、CentOS 等）✅ 推荐 |
+| VBoxSVGA | Windows 系统 |
+| VBoxVGA | 旧版兼容模式 |
+| None | 无图形控制器 |
+
+###### 一键优化预设
+
+| 预设模式 | 显存 | 3D 加速 | 图形控制器 | 适用场景 |
+|----------|------|---------|------------|----------|
+| 服务器模式 | 16 MB | 关闭 | VMSVGA | 无界面/命令行操作 |
+| 桌面模式 ⭐ | 128 MB | 开启 | VMSVGA | Ubuntu 桌面环境 |
+| 开发模式 | 256 MB | 开启 | VMSVGA | GUI + 3D 应用开发 |
+
+**提示**: 如果虚拟机界面无法正常显示（如黑屏、卡顿），建议使用"桌面模式"一键优化。
 
 #### 3. 查看虚拟机详情
 
 显示虚拟机的详细信息：
 - 名称和 UUID
 - 内存和 CPU 配置
-- 显存大小
+- 显示配置（显存、图形控制器、3D/2D 加速）
 - 磁盘信息（容量、格式、路径）
 - 当前状态
 
@@ -130,6 +176,21 @@ npm start
 - 支持的格式：VDI、VMDK
 - 修改前请确保虚拟机已关闭
 - 修改后需要在虚拟机内部扩展分区和文件系统
+
+### 显存配置
+- 最小值：1 MB
+- 最大值：256 MB
+- 建议：桌面环境 128 MB，服务器环境 16 MB
+
+### 图形控制器
+- **VMSVGA** - Linux 系统推荐（Ubuntu、CentOS 等）
+- **VBoxSVGA** - Windows 系统推荐
+- **VBoxVGA** - 旧版兼容模式
+
+### 3D/2D 加速
+- 需要安装 Guest Additions 才能正常工作
+- 启用后可提升图形性能
+- 某些情况下可能导致兼容性问题，如遇问题可尝试禁用
 
 ## 测试
 
@@ -169,12 +230,14 @@ vagrant_vitualbox_dashboard/
 ├── src/
 │   ├── index.js          # 主应用入口
 │   └── utils/
-│       └── vbox.js       # VirtualBox 命令封装
+│       ├── vbox.js       # VirtualBox 命令封装
+│       └── vagrantfile.js # Vagrantfile 同步功能
 ├── tests/
 │   ├── structure.test.js # 结构测试
 │   ├── vbox.test.js      # VBoxManage 测试
 │   ├── menu.test.js      # 菜单功能测试
-│   └── config.test.js    # 配置功能测试
+│   ├── config.test.js    # 配置功能测试
+│   └── vagrantfile.test.js # Vagrantfile 测试
 ├── docs/
 │   └── plans/
 │       └── 2026-02-18-interactive-vbox-config.md  # 实现计划
@@ -221,9 +284,26 @@ end
 vb.customize ["modifyvm", :id, "--memory", "2048"]
 vb.customize ["modifyvm", :id, "--cpus", "2"]
 
+# 显示配置（通过 customize）
+vb.customize ["modifyvm", :id, "--vram", "128"]
+vb.customize ["modifyvm", :id, "--graphicscontroller", "vmsvga"]
+vb.customize ["modifyvm", :id, "--accelerate3d", "on"]
+
 # vagrant-disksize 插件格式
 config.disksize.size = "50GB"
 ```
+
+#### 支持同步的配置项
+
+| 配置项 | Vagrantfile 配置方式 |
+|--------|---------------------|
+| 内存 | `vb.memory` 或 `vb.customize ["modifyvm", :id, "--memory", ...]` |
+| CPU | `vb.cpus` 或 `vb.customize ["modifyvm", :id, "--cpus", ...]` |
+| 磁盘 | `config.disksize.size` (需要 vagrant-disksize 插件) |
+| 显存 | `vb.customize ["modifyvm", :id, "--vram", ...]` |
+| 图形控制器 | `vb.customize ["modifyvm", :id, "--graphicscontroller", ...]` |
+| 3D 加速 | `vb.customize ["modifyvm", :id, "--accelerate3d", ...]` |
+| 2D 加速 | `vb.customize ["modifyvm", :id, "--accelerate2dvideo", ...]` |
 
 #### 自动同步流程
 
@@ -327,6 +407,35 @@ config.disksize.size = "50GB"
    sudo xfs_growfs /
    ```
 
+### 显示问题排查
+
+如果虚拟机界面无法正常显示（黑屏、卡顿、分辨率异常）：
+
+1. **检查显存设置**
+   - 桌面环境建议 128 MB 以上
+   - 使用"显示配置 → 一键优化 → 桌面模式"
+
+2. **检查图形控制器**
+   - Linux 系统推荐使用 VMSVGA
+   - Windows 系统推荐使用 VBoxSVGA
+
+3. **启用 3D 加速**
+   - 需要安装 Guest Additions
+   - 在虚拟机菜单：设备 → 安装增强功能
+
+4. **Guest Additions 安装**
+   ```bash
+   # 在虚拟机内执行
+   sudo mount /dev/cdrom /mnt
+   sudo /mnt/VBoxLinuxAdditions.run
+   sudo reboot
+   ```
+
+5. **其他可能原因**
+   - 内存不足（建议 2GB 以上）
+   - CPU 核心数过少（建议 2 核以上）
+   - 主机显卡驱动问题
+
 ## 开发
 
 ### 添加新功能
@@ -353,6 +462,17 @@ MIT License
 欢迎提交 Issue 和 Pull Request！
 
 ## 更新日志
+
+### v1.3.0
+- 🖥️ **新增显示配置管理功能**
+  - 支持修改显存（1-256 MB）
+  - 支持修改图形控制器（VMSVGA/VBoxSVGA/VBoxVGA）
+  - 支持切换 3D/2D 加速
+  - 一键优化预设（服务器模式/桌面模式/开发模式）
+  - 显示配置自动同步到 Vagrantfile
+- 📊 **增强虚拟机详情显示**
+  - 新增显示配置信息展示
+  - 优化信息分类和排版
 
 ### v1.2.0
 - 🔄 **新增 Vagrantfile 自动同步功能**

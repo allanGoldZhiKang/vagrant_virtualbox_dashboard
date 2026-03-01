@@ -202,24 +202,110 @@ function updateVagrantfileCPU(content, cpuCount) {
 function updateVagrantfileDisk(content, diskSizeGB) {
   let updated = content
 
-  // 检查是否使用了 vagrant-disksize 插件
   if (updated.includes('vagrant-disksize') || updated.includes('config.disksize')) {
-    // 更新磁盘大小
     const diskSizeRegex = /(config\.disksize\.size\s*=\s*)(["']?)(\d+\s*GB?)(["']?)/i
     if (diskSizeRegex.test(updated)) {
       updated = updated.replace(diskSizeRegex, `$1"${diskSizeGB}GB"`)
     } else {
-      // 添加磁盘大小配置
       updated = updated.replace(
         /(Vagrant\.configure\([^)]+\)\s+do\s+\|config\|)/,
         `$1\n  config.disksize.size = "${diskSizeGB}GB"`
       )
     }
   } else {
-    // 如果没有使用插件，添加注释说明
     const providerBlockRegex = /(config\.vm\.provider\s+["']virtualbox["']\s+do\s+\|vb\|[^]*?)(end)/
     if (providerBlockRegex.test(updated)) {
       updated = updated.replace(providerBlockRegex, `$1  # 磁盘已扩容至 ${diskSizeGB}GB\n  # 如需在 Vagrantfile 中配置磁盘大小，请安装 vagrant-disksize 插件:\n  # vagrant plugin install vagrant-disksize\n  # 然后添加: config.disksize.size = "${diskSizeGB}GB"\n$2`)
+    }
+  }
+
+  return updated
+}
+
+function updateVagrantfileVRAM(content, vramMB) {
+  let updated = content
+
+  const vramRegex = /(vb\.customize\s*\[\s*["']modifyvm["'],\s*:id,\s*["']--vram["'],\s*["']?)(\d+)(["']?\s*\])/
+  
+  if (vramRegex.test(updated)) {
+    updated = updated.replace(vramRegex, `$1${vramMB}$3`)
+  } else {
+    const providerBlockRegex = /(config\.vm\.provider\s+["']virtualbox["']\s+do\s+\|vb\|[^]*?)(end)/
+    if (providerBlockRegex.test(updated)) {
+      updated = updated.replace(
+        providerBlockRegex, 
+        `$1  vb.customize ["modifyvm", :id, "--vram", "${vramMB}"]\n$2`
+      )
+    } else {
+      updated += `\n\nconfig.vm.provider "virtualbox" do |vb|\n  vb.customize ["modifyvm", :id, "--vram", "${vramMB}"]\nend\n`
+    }
+  }
+
+  return updated
+}
+
+function updateVagrantfileGraphicsController(content, controller) {
+  let updated = content
+
+  const gcRegex = /(vb\.customize\s*\[\s*["']modifyvm["'],\s*:id,\s*["']--graphicscontroller["'],\s*["'])(\w+)(["']\s*\])/
+  
+  if (gcRegex.test(updated)) {
+    updated = updated.replace(gcRegex, `$1${controller}$3`)
+  } else {
+    const providerBlockRegex = /(config\.vm\.provider\s+["']virtualbox["']\s+do\s+\|vb\|[^]*?)(end)/
+    if (providerBlockRegex.test(updated)) {
+      updated = updated.replace(
+        providerBlockRegex, 
+        `$1  vb.customize ["modifyvm", :id, "--graphicscontroller", "${controller}"]\n$2`
+      )
+    } else {
+      updated += `\n\nconfig.vm.provider "virtualbox" do |vb|\n  vb.customize ["modifyvm", :id, "--graphicscontroller", "${controller}"]\nend\n`
+    }
+  }
+
+  return updated
+}
+
+function updateVagrantfile3DAcceleration(content, enabled) {
+  let updated = content
+  const value = enabled ? 'on' : 'off'
+
+  const accel3dRegex = /(vb\.customize\s*\[\s*["']modifyvm["'],\s*:id,\s*["']--accelerate3d["'],\s*["'])(on|off)(["']\s*\])/
+  
+  if (accel3dRegex.test(updated)) {
+    updated = updated.replace(accel3dRegex, `$1${value}$3`)
+  } else {
+    const providerBlockRegex = /(config\.vm\.provider\s+["']virtualbox["']\s+do\s+\|vb\|[^]*?)(end)/
+    if (providerBlockRegex.test(updated)) {
+      updated = updated.replace(
+        providerBlockRegex, 
+        `$1  vb.customize ["modifyvm", :id, "--accelerate3d", "${value}"]\n$2`
+      )
+    } else {
+      updated += `\n\nconfig.vm.provider "virtualbox" do |vb|\n  vb.customize ["modifyvm", :id, "--accelerate3d", "${value}"]\nend\n`
+    }
+  }
+
+  return updated
+}
+
+function updateVagrantfile2DAcceleration(content, enabled) {
+  let updated = content
+  const value = enabled ? 'on' : 'off'
+
+  const accel2dRegex = /(vb\.customize\s*\[\s*["']modifyvm["'],\s*:id,\s*["']--accelerate2dvideo["'],\s*["'])(on|off)(["']\s*\])/
+  
+  if (accel2dRegex.test(updated)) {
+    updated = updated.replace(accel2dRegex, `$1${value}$3`)
+  } else {
+    const providerBlockRegex = /(config\.vm\.provider\s+["']virtualbox["']\s+do\s+\|vb\|[^]*?)(end)/
+    if (providerBlockRegex.test(updated)) {
+      updated = updated.replace(
+        providerBlockRegex, 
+        `$1  vb.customize ["modifyvm", :id, "--accelerate2dvideo", "${value}"]\n$2`
+      )
+    } else {
+      updated += `\n\nconfig.vm.provider "virtualbox" do |vb|\n  vb.customize ["modifyvm", :id, "--accelerate2dvideo", "${value}"]\nend\n`
     }
   }
 
@@ -254,7 +340,6 @@ async function writeVagrantfile(vagrantfilePath, content) {
  */
 async function syncVagrantfile(vmName, configType, value) {
   try {
-    // 查找 Vagrantfile
     const vagrantfilePath = await findVagrantfile(vmName)
 
     if (!vagrantfilePath) {
@@ -265,10 +350,8 @@ async function syncVagrantfile(vmName, configType, value) {
       }
     }
 
-    // 读取 Vagrantfile
     let content = await readVagrantfile(vagrantfilePath)
 
-    // 根据配置类型更新
     switch (configType) {
       case 'memory':
         content = updateVagrantfileMemory(content, value)
@@ -279,6 +362,18 @@ async function syncVagrantfile(vmName, configType, value) {
       case 'disk':
         content = updateVagrantfileDisk(content, value)
         break
+      case 'vram':
+        content = updateVagrantfileVRAM(content, value)
+        break
+      case 'graphicscontroller':
+        content = updateVagrantfileGraphicsController(content, value)
+        break
+      case 'accelerate3d':
+        content = updateVagrantfile3DAcceleration(content, value)
+        break
+      case 'accelerate2d':
+        content = updateVagrantfile2DAcceleration(content, value)
+        break
       default:
         return {
           success: false,
@@ -287,7 +382,6 @@ async function syncVagrantfile(vmName, configType, value) {
         }
     }
 
-    // 写入更新后的内容
     const backupPath = await writeVagrantfile(vagrantfilePath, content)
 
     return {
@@ -311,6 +405,10 @@ module.exports = {
   updateVagrantfileMemory,
   updateVagrantfileCPU,
   updateVagrantfileDisk,
+  updateVagrantfileVRAM,
+  updateVagrantfileGraphicsController,
+  updateVagrantfile3DAcceleration,
+  updateVagrantfile2DAcceleration,
   writeVagrantfile,
   syncVagrantfile
 }

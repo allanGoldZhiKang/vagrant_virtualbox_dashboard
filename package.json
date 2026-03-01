@@ -1,6 +1,6 @@
 {
   "name": "vbox-config",
-  "version": "1.0.0",
+  "version": "1.3.0",
   "description": "Interactive VirtualBox VM Configuration Manager",
   "main": "src/index.js",
   "bin": {

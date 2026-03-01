@@ -1,15 +1,16 @@
 const {
   updateVagrantfileMemory,
   updateVagrantfileCPU,
-  updateVagrantfileDisk
+  updateVagrantfileDisk,
+  updateVagrantfileVRAM,
+  updateVagrantfileGraphicsController,
+  updateVagrantfile3DAcceleration
 } = require('../src/utils/vagrantfile')
 
 console.log('🧪 测试 Vagrantfile 更新功能...\n')
 
-// 测试更新内存配置
 console.log('🧪 测试内存配置更新...')
 
-// 测试1: 更新现有的 vb.memory
 const testMemory1 = `
 Vagrant.configure("2") do |config|
   config.vm.provider "virtualbox" do |vb|
@@ -26,7 +27,6 @@ if (result1.includes('vb.memory = "2048"')) {
   console.log('结果:', result1)
 }
 
-// 测试2: 添加新的 vb.memory
 const testMemory2 = `
 Vagrant.configure("2") do |config|
   config.vm.provider "virtualbox" do |vb|
@@ -42,7 +42,6 @@ if (result2.includes('vb.memory = "2048"')) {
   console.log('结果:', result2)
 }
 
-// 测试3: 更新 vb.customize 中的内存
 const testMemory3 = `
 Vagrant.configure("2") do |config|
   config.vm.provider "virtualbox" do |vb|
@@ -58,10 +57,8 @@ if (result3.includes('"--memory", "2048"')) {
   console.log('结果:', result3)
 }
 
-// 测试更新 CPU 配置
 console.log('\n🧪 测试 CPU 配置更新...')
 
-// 测试4: 更新现有的 vb.cpus
 const testCPU1 = `
 Vagrant.configure("2") do |config|
   config.vm.provider "virtualbox" do |vb|
@@ -78,7 +75,6 @@ if (result4.includes('vb.cpus = 4')) {
   console.log('结果:', result4)
 }
 
-// 测试5: 更新 vb.customize 中的 CPU
 const testCPU2 = `
 Vagrant.configure("2") do |config|
   config.vm.provider "virtualbox" do |vb|
@@ -94,10 +90,8 @@ if (result5.includes('"--cpus", 4')) {
   console.log('结果:', result5)
 }
 
-// 测试磁盘配置更新
 console.log('\n🧪 测试磁盘配置更新...')
 
-// 测试6: 更新现有的 vagrant-disksize 配置
 const testDisk1 = `
 Vagrant.configure("2") do |config|
   config.disksize.size = "20GB"
@@ -115,7 +109,6 @@ if (result6.includes('config.disksize.size = "50GB"')) {
   console.log('结果:', result6)
 }
 
-// 测试7: 没有 vagrant-disksize 时添加注释
 const testDisk2 = `
 Vagrant.configure("2") do |config|
   config.vm.provider "virtualbox" do |vb|
@@ -129,6 +122,72 @@ if (result7.includes('磁盘已扩容至 50GB') || result7.includes('vagrant-dis
 } else {
   console.log('❌ 测试7失败: 未能添加磁盘扩容说明')
   console.log('结果:', result7)
+}
+
+console.log('\n🧪 测试显存配置更新...')
+
+const testVRAM1 = `
+Vagrant.configure("2") do |config|
+  config.vm.provider "virtualbox" do |vb|
+    vb.customize ["modifyvm", :id, "--vram", "16"]
+  end
+end
+`
+const result8 = updateVagrantfileVRAM(testVRAM1, 128)
+if (result8.includes('"--vram", "128"')) {
+  console.log('✅ 测试8通过: 成功更新现有显存配置')
+} else {
+  console.log('❌ 测试8失败: 未能更新现有显存配置')
+  console.log('结果:', result8)
+}
+
+const testVRAM2 = `
+Vagrant.configure("2") do |config|
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = "1024"
+  end
+end
+`
+const result9 = updateVagrantfileVRAM(testVRAM2, 128)
+if (result9.includes('"--vram", "128"')) {
+  console.log('✅ 测试9通过: 成功添加新的显存配置')
+} else {
+  console.log('❌ 测试9失败: 未能添加新的显存配置')
+  console.log('结果:', result9)
+}
+
+console.log('\n🧪 测试图形控制器配置更新...')
+
+const testGC1 = `
+Vagrant.configure("2") do |config|
+  config.vm.provider "virtualbox" do |vb|
+    vb.customize ["modifyvm", :id, "--graphicscontroller", "vboxvga"]
+  end
+end
+`
+const result10 = updateVagrantfileGraphicsController(testGC1, 'vmsvga')
+if (result10.includes('"--graphicscontroller", "vmsvga"')) {
+  console.log('✅ 测试10通过: 成功更新图形控制器配置')
+} else {
+  console.log('❌ 测试10失败: 未能更新图形控制器配置')
+  console.log('结果:', result10)
+}
+
+console.log('\n🧪 测试 3D 加速配置更新...')
+
+const test3D1 = `
+Vagrant.configure("2") do |config|
+  config.vm.provider "virtualbox" do |vb|
+    vb.customize ["modifyvm", :id, "--accelerate3d", "off"]
+  end
+end
+`
+const result11 = updateVagrantfile3DAcceleration(test3D1, true)
+if (result11.includes('"--accelerate3d", "on"')) {
+  console.log('✅ 测试11通过: 成功更新 3D 加速配置')
+} else {
+  console.log('❌ 测试11失败: 未能更新 3D 加速配置')
+  console.log('结果:', result11)
 }
 
 console.log('\n🎉 Vagrantfile 更新功能测试完成!')
