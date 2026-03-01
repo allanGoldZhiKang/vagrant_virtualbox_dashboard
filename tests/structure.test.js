@@ -60,7 +60,7 @@ function testPackageScripts() {
     throw new Error('start 脚本配置不正确')
   }
   
-  if (!packageJson.scripts || packageJson.scripts.test !== 'node src/utils/vbox.js') {
+  if (!packageJson.scripts || !packageJson.scripts.test.includes('test:')) {
     throw new Error('test 脚本配置不正确')
   }
   

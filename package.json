@@ -4,11 +4,22 @@
   "description": "Interactive VirtualBox VM Configuration Manager",
   "main": "src/index.js",
   "bin": {
-    "vbox-config": "./vbox-config"
+    "vbox-config": "./vbox-config",
+    "vbox-config-win": "./vbox-config.bat"
   },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
   "scripts": {
     "start": "node src/index.js",
-    "test": "node src/utils/vbox.js"
+    "test": "npm run test:structure && npm run test:vbox && npm run test:menu && npm run test:config && npm run test:vagrantfile",
+    "test:structure": "node tests/structure.test.js",
+    "test:vbox": "node tests/vbox.test.js",
+    "test:menu": "node tests/menu.test.js",
+    "test:config": "node tests/config.test.js",
+    "test:vagrantfile": "node tests/vagrantfile.test.js"
   },
   "keywords": ["virtualbox", "vm", "configuration", "cli"],
   "author": "VBox Config Tool",
